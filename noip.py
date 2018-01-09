@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # 定時執行
-# add /etc/crontab
+# add: /etc/crontab
 # 0,10,20,30,40,50	*	*	*	*	admin	/var/services/homes/admin/noip.sh
 # restart Synology NAS
 #
@@ -17,7 +17,7 @@
 # Default-Stop:   0 1 6
 ### END INIT INFO
 #
-# add: /usr/bin/python /home/ubuntu/noip.py
+# add line: /usr/bin/python /home/ubuntu/noip.py
 # $ sudo chmod 755 /etc/init.d/noip.sh
 # $ sudo update-rc.d noip.sh defaults
 # remove:
