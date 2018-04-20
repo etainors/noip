@@ -118,7 +118,9 @@ def main_v1(username, password, host_from, host_to):
     log('update to '+new_ip)
 
 # 使用網頁，改host的ip
-def main(username, password, host, ip):
+def main(username, password, host, ip=''):
+    if not ip:
+        ip = requests.get('https://api.ipify.org').content.strip()
     s = login(username, password)
     
     # 讀管理頁
