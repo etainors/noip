@@ -49,15 +49,20 @@ def login(username, password):
     
     # 登入
     log('login')
-    s.post('https://www.noip.com/login', data={
+    G['web'][1] = s.post('https://www.noip.com/login', data={
         'username':username,
         'password':password,
         'submit_login_page':'1',
-        '_token':soup1.find('input', {'name':'_token'})['value'],
+        '_token':G['soup'][0].find('input', {'name':'_token'})['value'],
         'Login':''
     })
-    
-    return s
+    G['soup'][1] = bs(G['web'][1].content)
+    if G['soup'][1].find('title').text.strip() == u'My No-IP':
+        log('login success')
+        return s
+    else:
+        log('login fail')
+        exit()
 
 # 使用網頁，改host_to的ip為host_from的ip
 def main_v1(username, password, host_from, host_to):
