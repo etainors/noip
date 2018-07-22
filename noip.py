@@ -69,8 +69,8 @@ def login(username, password):
         else:
             log('login fail')
             open('tmp.html', 'wb').write(G['web'][0].content)
-            sleep(n)
-            n *= 2
+            sleep(t)
+            t *= 2
 
 # 使用網頁，改host_to的ip為host_from的ip
 def main_v1(username, password, host_from, host_to):
