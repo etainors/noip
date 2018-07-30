@@ -28,7 +28,7 @@ from time import sleep
 from datetime import datetime
 bs = lambda i:BeautifulSoup(i, 'html.parser')
 
-G = {'web':{}, 'soup':{}}
+G = {'web':{}, 'soup':{}, 'data':{}}
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36'
 
 def log(s):
@@ -147,6 +147,7 @@ def main(username, password, host, ip):
     s = login(username, password)
     data = manage(s)
     
+    # 不需更新
     for i in data:
         if i[0] == host and i[1] == ip:
             log('no need modify, logout')
