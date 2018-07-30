@@ -72,26 +72,52 @@ def login(username, password):
             sleep(t)
             t *= 2
 
+
+# 讀管理頁
+def manage(s, log_id=2):
+    log('read manage')
+    G['web'][log_id] = s.get('https://www.noip.com/members/dns/')
+    G['soup'][log_id] = bs(G['web'][log_id].content)
+    r = []
+    for i in G['soup'][log_id].select('tr.table-non-striped-row'):
+        r.append([i.find('td', {'class':'ml-20'}).text.strip(), i.find('td', {'class':'withright'}).text.strip(), 'https://www.noip.com/members/dns/'+i.find('a', {'class':'btn-labeled'})['href']])
+    return r
+
+# 更新IP
+def modify(s, url, ip, log_id=3):
+    log('read modity')
+    G['web'][log_id] = s.get(url)
+    G['soup'][log_id] = bs(G['web'][log_id].content)
+    G['data'][log_id] = dict((i, G['soup'][log_id].find('input', {'name':i})['value']) for i in ['host[domain]', 'host[host]', 'host[port][ip]', 'host[port][port]', 'host[ttl]', 'nlocations', 'token'])
+    G['data'][log_id].update({
+        'do':'update',
+        'host[group_id]':'0',
+        'host[ip]':ip,
+        'host[mx][0][priority]':'5',
+        'host[redirect][protocol]':'http',
+        'host[type]':'a',
+    })
+    log('modity ip to '+ip)
+    s.post(url, data=G['data'][log_id])
+
 # 使用網頁，改host_to的ip為host_from的ip
 def main_v1(username, password, host_from, host_to):
     s = login(username, password)
+    data = manage(s)
     
-    # 讀管理頁
-    log('read manage')
-    G['web'][2] = s.get('https://www.noip.com/members/dns/')
-    G['soup'][2] = bs(G['web'][2].content)
-    if len(set(map(lambda i:i.text.strip(), G['soup'][2].select('td.withright')))) == 1:
+    # 不需更新
+    if len(set(map(lambda i:i[1], data))) == 1:
         log('no need modify, logout')
         s.get('https://www.noip.com/logout')
         exit()
     
     new_ip = ''
     mod_url = []
-    for i in G['soup'][2].select('tr.service-entry'):
-        if i.find('td', {'class':'entry'}).text.strip() == host_from:
-            new_ip = i.find('td', {'class':'withright'}).text.strip()
-        if i.find('td', {'class':'entry'}).text.strip() in host_to:
-            mod_url.append('https://www.noip.com/members/dns/'+i.find('a', {'class':'bullet-modify'})['href'])
+    for i in data:
+        if i[0] == host_from:
+            new_ip = i[1]
+        if i[0] in host_to:
+            mod_url.append(i[2])
     
     # 偵錯
     if not new_ip or len(mod_url) != len(host_to):
@@ -101,26 +127,12 @@ def main_v1(username, password, host_from, host_to):
 
     # 更新IP
     for url in mod_url:
-        log('read modity')
-        G['web'][3] = s.get(url)
-        G['soup'][3] = bs(G['web'][3].content)
-        data3 = dict((i, G['soup'][3].find('input', {'name':i})['value']) for i in ['host[domain]', 'host[host]', 'host[port][ip]', 'host[port][port]', 'host[ttl]', 'nlocations', 'token'])
-        data3.update({
-            'do':'update',
-            'host[group_id]':'0',
-            'host[ip]':new_ip,
-            'host[mx][0][priority]':'5',
-            'host[redirect][protocol]':'http',
-            'host[type]':'a',
-        })
-        log('modity ip to '+new_ip)
-        s.post(url, data=data3)
+        modify(s, url, new_ip)
 
     # 檢查結果
     log('read manage')
-    G['web'][4] = s.get('https://www.noip.com/members/dns/')
-    G['soup'][4] = bs(G['web'][4].content)
-    if set(map(lambda i:i.text.strip(), G['soup'][4].select('td.withright'))) != set([new_ip]):
+    r = manage(s, 4)
+    if set(map(lambda i:i[1], r)) != set([new_ip]):
         log('update '+new_ip+' error')
         s.get('https://www.noip.com/logout')
         exit()
@@ -133,51 +145,31 @@ def main_v1(username, password, host_from, host_to):
 # 使用網頁，改host的ip
 def main(username, password, host, ip):
     s = login(username, password)
+    data = manage(s)
     
-    # 讀管理頁
-    log('read manage')
-    G['web'][2] = s.get('https://www.noip.com/members/dns/')
-    G['soup'][2] = bs(G['web'][2].content)
-    mod_url = []
-    for i in G['soup'][2].select('tr.service-entry'):
-        if i.find('td', {'class':'entry'}).text.strip() == host:
-            if i.find('td', {'class':'withright'}).text.strip() == ip:
-                log('no need modify, logout')
-                s.get('https://www.noip.com/logout')
-                exit()
-            mod_url.append('https://www.noip.com/members/dns/'+i.find('a', {'class':'bullet-modify'})['href'])
+    for i in data:
+        if i[0] == host and i[1] == ip:
+            log('no need modify, logout')
+            s.get('https://www.noip.com/logout')
+            exit()
     
     # 偵錯
-    if not mod_url:
+    if host not in map(lambda i:i[0], data):
         open('tmp.html', 'wb').write(G['web'][2].content)
         log(host+' not in account: '+username)
         s.get('https://www.noip.com/logout')
         exit()
     
     # 更新IP
-    for url in mod_url:
-        log('read modity')
-        G['web'][3] = s.get(url)
-        G['soup'][3] = bs(G['web'][3].content)
-        data3 = dict((i, G['soup'][3].find('input', {'name':i})['value']) for i in ['host[domain]', 'host[host]', 'host[port][ip]', 'host[port][port]', 'host[ttl]', 'nlocations', 'token'])
-        data3.update({
-            'do':'update',
-            'host[group_id]':'0',
-            'host[ip]':ip,
-            'host[mx][0][priority]':'5',
-            'host[redirect][protocol]':'http',
-            'host[type]':'a',
-        })
-        log('modity')
-        s.post(url, data=data3)
+    for i in data:
+        if i[0] == host:
+            modify(s, i[2], ip)
     
     # 檢查結果
-    log('read manage')
-    G['web'][4] = s.get('https://www.noip.com/members/dns/')
-    G['soup'][4] = bs(G['web'][4].content)
-    for i in G['soup'][4].select('tr.service-entry'):
-        if i.find('td', {'class':'entry'}).text.strip() == host:
-            if i.find('td', {'class':'withright'}).text.strip() != ip:
+    r = manage(s, 4)
+    for i in r:
+        if i[0] == host:
+            if i[1] != ip:
                 log('update '+host+' to '+ip+' error')
                 s.get('https://www.noip.com/logout')
                 exit()
