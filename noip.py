@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 #
 # 定時執行
@@ -17,7 +18,7 @@
 # Default-Stop:   0 1 6
 ### END INIT INFO
 #
-# add line: /usr/bin/python /home/ubuntu/noip.py
+# add line: /usr/bin/python3 /home/ubuntu/noip.py
 # $ sudo chmod 755 /etc/init.d/noip.sh
 # $ sudo update-rc.d noip.sh defaults
 # remove:
@@ -29,28 +30,28 @@ from datetime import datetime
 bs = lambda i:BeautifulSoup(i, 'html.parser')
 
 G = {'web':{}, 'soup':{}, 'data':{}}
-UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36'
+UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36'
 
 def log(s):
     t = datetime.utcnow().isoformat()
-    print t, s
-    open('log.txt', 'a').write(t+'\t'+s+'\n')
+    print(t, s)
+    open(PATH_NOIP_LOG, 'a').write(t+'\t'+s+'\n')
 
 # 使用noip的API
 def dynupdate(username, password, hostname, ip=''):
     url = 'https://'+username+':'+password+'@dynupdate.no-ip.com/nic/update?hostname='+hostname+('&myip='+ip if ip else '')
-    log(requests.get(url).content.strip())
+    log(requests.get(url).content.decode('utf8').strip())
 
 def login(username, password):
     t = 1
     while t < 1000:
         s = requests.Session()
-        
+
         # 讀登入頁取token
         log('read login')
         G['web'][0] = s.get('https://www.noip.com/login', headers={'User-Agent':UA})
         G['soup'][0] = bs(G['web'][0].content)
-        
+
         # 登入
         log('login')
         G['web'][1] = s.post('https://www.noip.com/login', data={
@@ -60,10 +61,10 @@ def login(username, password):
             '_token':G['soup'][0].find('input', {'name':'_token'})['value'],
             'Login':''
         })
-        
+
         # 檢查
         G['soup'][1] = bs(G['web'][1].content)
-        if G['soup'][1].find('title').text.strip() == u'My No-IP':
+        if G['soup'][1].find('title').text.strip() == 'My No-IP':
             log('login success')
             return s
         else:
@@ -104,13 +105,13 @@ def modify(s, url, ip, log_id=3):
 def main_v1(username, password, host_from, host_to):
     s = login(username, password)
     data = manage(s)
-    
+
     # 不需更新
-    if len(set(map(lambda i:i[1], data))) == 1:
+    if len(set([i[1] for i in data])) == 1:
         log('no need modify, logout')
         s.get('https://www.noip.com/logout')
         exit()
-    
+
     new_ip = ''
     mod_url = []
     for i in data:
@@ -118,7 +119,7 @@ def main_v1(username, password, host_from, host_to):
             new_ip = i[1]
         if i[0] in host_to:
             mod_url.append(i[2])
-    
+
     # 偵錯
     if not new_ip or len(mod_url) != len(host_to):
         log('host_from/host_to setting error')
@@ -132,7 +133,7 @@ def main_v1(username, password, host_from, host_to):
     # 檢查結果
     log('read manage')
     r = manage(s, 4)
-    if set(map(lambda i:i[1], r)) != set([new_ip]):
+    if set([i[1] for i in r]) != set([new_ip]):
         log('update '+new_ip+' error')
         s.get('https://www.noip.com/logout')
         exit()
@@ -146,26 +147,26 @@ def main_v1(username, password, host_from, host_to):
 def main(username, password, host, ip):
     s = login(username, password)
     data = manage(s)
-    
+
     # 不需更新
     for i in data:
         if i[0] == host and i[1] == ip:
             log('no need modify, logout')
             s.get('https://www.noip.com/logout')
             exit()
-    
+
     # 偵錯
-    if host not in map(lambda i:i[0], data):
+    if host not in [i[0] for i in data]:
         open('tmp.html', 'wb').write(G['web'][2].content)
         log(host+' not in account: '+username)
         s.get('https://www.noip.com/logout')
         exit()
-    
+
     # 更新IP
     for i in data:
         if i[0] == host:
             modify(s, i[2], ip)
-    
+
     # 檢查結果
     r = manage(s, 4)
     for i in r:
@@ -174,11 +175,13 @@ def main(username, password, host, ip):
                 log('update '+host+' to '+ip+' error')
                 s.get('https://www.noip.com/logout')
                 exit()
-    
+
     # 登出
     log('logout')
     s.get('https://www.noip.com/logout')
     log(host+' update to '+ip)
+
+PATH_NOIP_LOG = '../../log/noip.log'
 
 if __name__ == '__main__':
     import argparse
@@ -217,6 +220,7 @@ if __name__ == '__main__':
 
 '''
 exit()
-python
+python3
 from noip import *
 '''
+
