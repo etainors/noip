@@ -23,14 +23,14 @@
 # $ sudo update-rc.d noip.sh defaults
 # remove:
 # $ sudo update-rc.d noip.sh remove
-import requests
+import sys, requests
 from bs4 import BeautifulSoup
 from time import sleep
 from datetime import datetime
 bs = lambda i:BeautifulSoup(i, 'html.parser')
 
 G = {'web':{}, 'soup':{}, 'data':{}}
-UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36'
+UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36'
 
 def log(s):
     t = datetime.utcnow().isoformat()
@@ -39,8 +39,8 @@ def log(s):
 
 # 使用noip的API
 def dynupdate(username, password, hostname, ip=''):
-    url = 'https://'+username+':'+password+'@dynupdate.no-ip.com/nic/update?hostname='+hostname+('&myip='+ip if ip else '')
-    log(requests.get(url).content.decode('utf8').strip())
+    url = 'https://dynupdate.no-ip.com/nic/update?hostname='+hostname+('&myip='+ip if ip else '')
+    log(requests.get(url, auth=(username, password)).content.decode('utf8').strip())
 
 def login(username, password):
     t = 1
@@ -71,7 +71,7 @@ def login(username, password):
             log('login fail')
             open('tmp.html', 'wb').write(G['web'][0].content)
             sleep(t)
-            t *= 2
+            t <<= 1
 
 
 # 讀管理頁
@@ -185,8 +185,7 @@ PATH_NOIP_LOG = '../../log/noip.log'
 
 if __name__ == '__main__':
     import argparse
-    from sys import argv
-    if len(argv) > 1 and argv[1] == 'dyn':
+    if len(sys.argv) > 1 and sys.argv[1] == 'dyn':
         parser = argparse.ArgumentParser()
         parser.add_argument('mod', help='dyn: use noip api')
         parser.add_argument('-u', '--username', default='', help='noip login username')
@@ -195,7 +194,7 @@ if __name__ == '__main__':
         parser.add_argument('-i', '--ip', default='', help='noip ip to update to')
         args = parser.parse_args()
         dynupdate(args.username, args.password, args.domain, args.ip)
-    elif len(argv) > 1 and argv[1] == 'h2h':
+    elif len(sys.argv) > 1 and sys.argv[1] == 'h2h':
         parser = argparse.ArgumentParser()
         parser.add_argument('mod', help='h2h: use web, ip from host to hosts in same account')
         parser.add_argument('-u', '--username', default='', help='noip login username')
@@ -204,7 +203,7 @@ if __name__ == '__main__':
         parser.add_argument('-t', '--host_to', default='', help='ip to the hosts, separate by comma')
         args = parser.parse_args()
         main_v1(args.username, args.password, args.host_from, args.host_to.split(','))
-    elif len(argv) > 1 and argv[1] == 'i2h':
+    elif len(sys.argv) > 1 and sys.argv[1] == 'i2h':
         parser = argparse.ArgumentParser()
         parser.add_argument('mod', help='i2h: use noip web interface')
         parser.add_argument('-u', '--username', default='', help='noip login username')
@@ -223,4 +222,3 @@ exit()
 python3
 from noip import *
 '''
-
