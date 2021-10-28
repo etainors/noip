@@ -44,8 +44,11 @@ def main(d):
         print(name, *ips)
         if not os.path.isfile(d[name]) or not all(i in ips for i in open(d[name]).read().split('\n')):
             if os.path.isfile(d[name]):
-                sg_revoke(old_cidr(name), description=name)
-                print('revoke', name)
+                try:
+                    sg_revoke(old_cidr(name), description=name)
+                    print('revoke', name)
+                except:
+                    print('revoke fail')
             new_cidr = ','.join([ip+'/32' for ip in ips])
             sg_auth(new_cidr, description=name)
             print('auth', name)

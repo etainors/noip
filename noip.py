@@ -181,7 +181,7 @@ def main(username, password, host, ip):
     s.get('https://www.noip.com/logout')
     log(host+' update to '+ip)
 
-PATH_NOIP_LOG = '../../log/noip.log'
+PATH_NOIP_LOG = 'noip.log'
 
 if __name__ == '__main__':
     import argparse
