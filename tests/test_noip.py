@@ -21,6 +21,14 @@ class NoipTest(unittest.TestCase):
         os.unlink(f.name)
 
 
+    def test_tls_context(self):
+        import ssl
+        ctx = noip.tls_context()
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)       # 仍驗證憑證
+        self.assertTrue(ctx.check_hostname)                        # 仍驗證主機名稱
+        self.assertFalse(ctx.verify_flags & ssl.VERIFY_X509_STRICT)
+
+
 class SgTest(unittest.TestCase):
     def test_plan(self):
         want = {'a': {'1.1.1.1/32'}, 'b': {'2.2.2.2/32', '3.3.3.3/32'}, 'c': set(), 'd': {'4.4.4.4/32'}}

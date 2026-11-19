@@ -18,7 +18,7 @@ Two independent programs, standard library only:
 
 ## noip.py
 
-`--cred` points to a shell-style file (default `~/.noip.cred`) with two lines, `username=...` and `password=...`. It is only read, never executed, so the password never appears on the command line. Without `--ip`, No-IP uses the request's source IP. Exit code 0 means `good`/`nochg`; anything else (`nohost`, `badauth`, ...) is a failure.
+`--cred` points to a shell-style file (default `~/.noip.cred`) with two lines, `username=...` and `password=...`. It is only read, never executed, so the password never appears on the command line. Without `--ip`, No-IP uses the request's source IP. Certificates are still verified; only Python 3.13's strict X.509 check is relaxed, because TLS-inspecting networks often present a CA without a critical Basic Constraints. Exit code 0 means `good`/`nochg`; anything else (`nohost`, `badauth`, ...) is a failure.
 
 ```
 */10 * * * *  python3 /path/to/noip.py myhost.ddns.net --cred /path/to/cred

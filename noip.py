@@ -12,12 +12,19 @@
 
 排程與各主機的對應見 README.md。
 '''
-import re, sys, base64, argparse
+import re, sys, ssl, base64, argparse
 import urllib.request, urllib.parse
 from time import sleep
 from datetime import datetime, timezone
 
 API = 'https://dynupdate.no-ip.com/nic/update'
+
+def tls_context():
+    '''仍驗證憑證與主機名稱，只放寬 Python 3.13 的 X509 嚴格檢查：
+    有 SSL 檢查的網路（公司代理、自簽中繼 CA）常見 "Basic Constraints of CA cert not marked critical"'''
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return ctx
 
 def read_cred(path):
     d = {}
@@ -35,7 +42,7 @@ def update(domain, user, password, ip='', tries=3):
     })
     for i in range(tries):
         try:
-            return urllib.request.urlopen(req, timeout=15).read().decode().strip()
+            return urllib.request.urlopen(req, timeout=15, context=tls_context()).read().decode().strip()
         except OSError as e:     # URLError / HTTPError / timeout
             res = f'error {e!r}'
             if i < tries - 1:
