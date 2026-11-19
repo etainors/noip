@@ -1,65 +1,78 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-import os, json, subprocess
+'''
+跑在 EC2：監看一組 No-IP 主機名稱解析出的 IP，變了就同步 AWS security group 的 SSH 規則。
+規則的 Description = sg.json 的名稱；一律先加新的再撤舊的（不會中途把自己鎖在外面）；
+以 SG 現有規則為準，不存本地狀態。需要 aws CLI 與 ec2 權限。
+
+  sg.py [--config sg.json]             持續跑，每 interval 秒一次（建立 break 檔可停止）
+  sg.py --once [--dry]                 只跑一次；--dry 只列出會做什麼
+'''
+import os, sys, json, socket, argparse, subprocess
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timezone
 
-def dig(domain):
-    return subprocess.check_output(['dig', '+short', domain]).decode('utf8').strip().split('\n')
+HERE = os.path.dirname(os.path.abspath(__file__))
 
-def aws_ec2(cmd):
-    # type(cmd) = list
+def resolve(domain):
     try:
-        return json.loads(subprocess.check_output(['aws', 'ec2']+cmd))
-    except:
-        return None
+        return sorted({i[4][0] for i in socket.getaddrinfo(domain, None, socket.AF_INET)})
+    except socket.gaierror:
+        return []
 
-def sg(gid=None):
-    gid = gid if gid else SG_ID
-    return aws_ec2(['describe-security-groups', '--group-ids', gid])['SecurityGroups'][0]['IpPermissions']
+def aws(*args):
+    return json.loads(subprocess.check_output(['aws', 'ec2', *args]) or '{}')
 
-def old_cidr(description):
-    a = [i for i in sg() if 'FromPort' in i and i['FromPort'] == 22 and 'ToPort' in i and i['ToPort'] == 22][0]['IpRanges']
-    a = [i for i in a if i['Description'] == description]
-    if len(a) == 1:
-        return a[0]['CidrIp']
+def current(gid, port):
+    '''SG 上這個 port 的規則 -> {Description: {cidr, ...}}'''
+    out = {}
+    for p in aws('describe-security-groups', '--group-ids', gid)['SecurityGroups'][0]['IpPermissions']:
+        if p.get('IpProtocol') == 'tcp' and p.get('FromPort') == port and p.get('ToPort') == port:
+            for r in p['IpRanges']:
+                out.setdefault(r.get('Description', ''), set()).add(r['CidrIp'])
+    return out
 
-def sg_auth(cidr=None, gid=None, protocol='tcp', port=22, description='nas'):
-    gid = gid if gid else SG_ID
-    if not cidr:
-        ip = dig('0.noip.me')
-        if len(ip) == 1:
-            cidr = '%s/32'%ip[0]
-    aws_ec2(['authorize-security-group-ingress', '--group-id', gid, '--ip-permissions', "IpProtocol=%s,FromPort=%d,ToPort=%d,IpRanges=[{CidrIp=%s,Description=%s}]"%(protocol, port, port, cidr, description)])
+def plan(want, have):
+    '''want / have: {name: {cidr}} -> (要加, 要撤) 兩個 [(name, cidr)]；解析不到（want 為空）的名稱不動'''
+    add = [(n, c) for n, cs in want.items() if cs for c in sorted(cs - have.get(n, set()))]
+    rev = [(n, c) for n, cs in want.items() if cs for c in sorted(have.get(n, set()) - cs)]
+    return add, rev
 
-def sg_revoke(cidr=None, gid=None, protocol='tcp', port=22, description='nas'):
-    gid = gid if gid else SG_ID
-    if not cidr:
-        cidr = [j['CidrIp'] for i in sg(gid) for j in i['IpRanges'] if 'Description' in j and j['Description']==description][0]
-    aws_ec2(['revoke-security-group-ingress', '--group-id', gid, '--protocol', protocol, '--port', str(port), '--cidr', cidr])
+def perm(cidr, port, desc=None):
+    r = f'CidrIp={cidr}' + (f',Description={desc}' if desc else '')
+    return f'IpProtocol=tcp,FromPort={port},ToPort={port},IpRanges=[{{{r}}}]'
 
-def main(d):
-    for name in d:
-        ips = dig(d[name])
-        print(name, *ips)
-        if not os.path.isfile(d[name]) or not all(i in ips for i in open(d[name]).read().split('\n')):
-            if os.path.isfile(d[name]):
-                try:
-                    sg_revoke(old_cidr(name), description=name)
-                    print('revoke', name)
-                except:
-                    print('revoke fail')
-            new_cidr = ','.join([ip+'/32' for ip in ips])
-            sg_auth(new_cidr, description=name)
-            print('auth', name)
-            open(d[name], 'w').write('\n'.join(ips))
+def run_once(conf, dry=False):
+    gid, port = conf['group_id'], conf.get('port', 22)
+    want = {n: {f'{ip}/32' for ip in resolve(d)} for n, d in conf['watch'].items()}
+    for n, d in conf['watch'].items():
+        print(n, d, *sorted(want[n]) or ['(沒解析，略過)'])
+    add, rev = plan(want, current(gid, port))
+    for n, c in add:
+        print('auth', n, c)
+        if not dry:
+            aws('authorize-security-group-ingress', '--group-id', gid, '--ip-permissions', perm(c, port, n))
+    for n, c in rev:
+        print('revoke', n, c)
+        if not dry:
+            aws('revoke-security-group-ingress', '--group-id', gid, '--ip-permissions', perm(c, port))
 
-SG_ID, d = json.load(open('arg.json'))
-# arg.json
-# ["sg-0123456789_aws_security_group_id", {"short_name1": "noip_domain1.noip.com", "short_name2": "noip_domain2.noip.com"}]
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--config', default=os.path.join(HERE, 'sg.json'))
+    p.add_argument('--once', action='store_true')
+    p.add_argument('--dry', action='store_true')
+    a = p.parse_args(argv)
+    conf = json.load(open(a.config))
+    while True:
+        print(datetime.now(timezone.utc).isoformat(), flush=True)
+        try:
+            run_once(conf, a.dry)
+        except Exception as e:     # aws 暫時失敗不要讓常駐程式死掉
+            print('fail', repr(e), flush=True)
+        if a.once or os.path.isfile(os.path.join(HERE, 'break')):
+            return
+        sleep(conf.get('interval', 300))
 
 if __name__ == '__main__':
-    while not os.path.isfile('break'):
-        print(datetime.utcnow().isoformat())
-        main(d)
-        sleep(300)
+    main()

@@ -1,0 +1,9 @@
+{
+  "group_id": "sg-0123456789abcdef0",
+  "port": 22,
+  "interval": 300,
+  "watch": {
+    "home": "home.example.ddns.net",
+    "laptop": "laptop.example.ddns.net"
+  }
+}
